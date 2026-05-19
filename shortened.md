@@ -157,82 +157,67 @@ print(f"Test Accuracy: {100*c/n:.2f}%")
 ## Program 10: 
 
 ```python
-import torch
-import torch.nn as nn 
-import torchvision
-import torch.optim as optim 
-from torch.utils.data import DataLoader, Subset
-import torchvision.transforms as transforms
+import torch, torchvision
+import torch.nn as nn, torch.optim as optim
+from torchvision import transforms
+from torch.utils.data import DataLoader,Subset
 
-transform = transforms.Compose([
-    transforms.Resize((224,224)), 
-    transforms.Grayscale(3), 
-    transforms.ToTensor(), 
-    transforms.Normalize((0.5, ), (0.5, ))
+t = transforms.Compose([
+    transforms.Resize((224,224)),
+    transforms.Grayscale(3),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5))
 ])
 
-train_loader = DataLoader(torchvision.datasets.MNIST(root='./data', download=True, train=True, transform=transform), batch_size=64, shuffle=True)
-test_loader = DataLoader(torchvision.datasets.MNIST(root='./data', download=True, train=False, transform=transform), batch_size=1000)
+#bit of the nasty to make it faster ☠️
+trd = DataLoader(Subset(torchvision.datasets.MNIST('./data',True,transform=t,download=True), range(2000)), 64, True)
+ted = DataLoader(Subset(torchvision.datasets.MNIST('./data',False,transform=t,download=True), range(500)), 1000)
 
-class AlexNet(nn.Module): 
+class AlexNet(nn.Module):
     def __init__(self):
         super().__init__()
         self.feats = nn.Sequential(
-            nn.Conv2d(3, 64, 11, 4, 2), nn.ReLU(), nn.MaxPool2d(3,2),
-            nn.Conv2d(64, 192, 5, padding=2), nn.ReLU(), nn.MaxPool2d(3,2),
-            nn.Conv2d(192, 384, 3, padding=1), nn.ReLU(), 
-            nn.Conv2d(384, 256, 3, padding=1), nn.ReLU(), 
-            nn.Conv2d(256,256, 3, padding=1), nn.ReLU(), nn.MaxPool2d(3,2)
+            nn.Conv2d(3,64,11,4,2), nn.ReLU(), nn.MaxPool2d(3,2),
+            nn.Conv2d(64,192,5,padding=2), nn.ReLU(), nn.MaxPool2d(3,2),
+            nn.Conv2d(192,384,3,padding=1), nn.ReLU(),
+            nn.Conv2d(384,256,3,padding=1), nn.ReLU(),
+            nn.Conv2d(256,256,3,padding=1), nn.ReLU(), nn.MaxPool2d(3,2)
         )
-        
         self.classifier = nn.Sequential(
-            nn.Dropout(), nn.Linear(256*6*6, 4096), 
-            nn.Dropout(), nn.Linear(4096, 4096), nn.ReLU(), 
+            nn.Dropout(), nn.Linear(256*6*6,4096),
+            nn.Dropout(), nn.Linear(4096,4096), nn.ReLU(),
             nn.Linear(4096,10)
         )
-    
-    def forward(self, x): 
-        x =  self.feats(x)
-        x =  x.view(x.size(0), -1)
+    def forward(self, x):
+        x = self.feats(x)
+        x = x.view(x.size(0),-1)
         x = self.classifier(x)
-        return x 
+        return x
 
-device = torch.device("cpu")
-net = AlexNet().to(device)
-crit = nn.CrossEntropyLoss()
-opt = optim.Adam(net.parameters(), lr=0.001)
+model = AlexNet()
+crit  = nn.CrossEntropyLoss()
+opt   = optim.Adam(model.parameters(), lr=0.001)
 
-for e in range(1): 
-    net.train()
-    r_loss = 0
-    
-    for i, (im, la) in enumerate(train_loader): 
-        
-        im, la = im.to(device), la.to(device)
-        
+for e in range(1):
+    model.train()
+    rl = 0
+    for i, (x, y) in enumerate(trd):
         opt.zero_grad()
-        loss = crit(net(im), la)
-        loss.backward()
-        
+        l = crit(model(x), y)
+        l.backward()
         opt.step()
-        
-        r_loss += loss.item()
-        
-        if i % 100==0: 
-            print(f"Epoch: {e+1}, Batch: {i+1}, loss: {r_loss:.3f}")
-            r_loss = 0 
+        rl += l.item()
+        if i % 100 == 0:
+            print(f'E{e+1} B{i+1} | Loss: {rl:.3f}')
+            rl = 0
 
-net.eval()
-corr = 0
-tot = 0 
-
+model.eval()
+c = n = 0
 with torch.no_grad():
-    for im, lab in test_loader:
-        im, la = im.to(device), la.to(device)
-        tot += la.size(0)
-        corr += (net(im).argmax(1)==la).sum().item()
-
-print(f"Final Acc: {100*(corr/tot):.2f}")
+    for x, y in ted:
+        c += (model(x).argmax(1)==y).sum().item()
+        n += len(y)
+print(f'Accuracy: {100*c/n:.2f}%')
 ```
 
 ## Program 11: 
